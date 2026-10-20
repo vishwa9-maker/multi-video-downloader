@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<title>NovaSave | Admin</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 0,#122a50,#070e1c 55%);color:#eaf2ff;display:grid;place-items:center;padding:22px}.panel{width:min(100%,470px);background:#111f36;border:1px solid #304967;border-radius:22px;padding:28px;box-shadow:0 24px 70px #0007}.brand{font-weight:800;font-size:28px;letter-spacing:-1px}.brand span{color:#39baff}h1{font-size:23px;margin:24px 0 8px}p{color:#a9bdd7;line-height:1.55}label{display:block;margin:17px 0 7px;font-size:14px;font-weight:650}input{width:100%;padding:14px;border:1px solid #405775;border-radius:12px;background:#0a1528;color:#fff;font:inherit}input:focus{outline:2px solid #3298ff;outline-offset:1px}button{width:100%;border:0;border-radius:12px;padding:14px;font:inherit;font-weight:750;background:linear-gradient(90deg,#287af3,#13a9ec);color:#fff;cursor:pointer;margin-top:20px}button:disabled{opacity:.55;cursor:wait}.secondary{background:#243b5b}.msg{margin-top:16px;padding:12px;border:1px solid #4b6b92;border-radius:10px;background:#132b48;overflow-wrap:anywhere}.error{border-color:#ad5662;background:#3b1c2a;color:#ffd7df}.hidden{display:none}.muted{font-size:13px;color:#91a8c7}.stat{background:#0c192c;border:1px solid #314b6b;border-radius:14px;padding:17px;margin-top:15px}.stat strong{display:block;margin-top:8px;font-size:20px}a{color:#69bdff}
+</style>
+</head>
+<body>
+<main class="panel">
+<div class="brand">Nova<span>Save</span> <span aria-hidden="true">↓</span></div>
+<section id="loginView">
+<h1>Private Admin Login</h1><p>Authorized NovaSave administrators only.</p>
+<form id="loginForm"><label for="email">Email address</label><input id="email" type="email" autocomplete="username" required placeholder="admin@example.com"><label for="password">Password</label><input id="password" type="password" autocomplete="current-password" required minlength="6" placeholder="Enter your password"><button id="loginButton" type="submit">Sign in securely</button></form>
+</section>
+<section id="dashboardView" class="hidden"><h1>Admin Dashboard</h1><p id="welcome"></p><div class="stat">Account access<strong>Verified administrator</strong></div><div class="stat">Analytics<strong>Not configured yet</strong><p class="muted">Visitor and download counts require a separate event tracking system and secure database policies. No numbers are invented.</p></div><button class="secondary" id="logoutButton" type="button">Log out</button></section>
+<div id="message" class="msg hidden" role="status" aria-live="polite"></div>
+<p class="muted">Protected by Supabase Authentication and Row Level Security. This page is not linked from the public menu.</p>
+</main>
+<script type="module">
+// NovaSave Supabase public client configuration.
+// Use the publishable (sb_publishable_...) key, NEVER a secret or service_role key.
+const SUPABASE_URL = 'https://yvnhysvoxbulnadlntsq.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_qp_XQmIDHq5mqG-_gOxepg_FsMvN_bK';
+const loginView=document.getElementById('loginView');
+const dashboardView=document.getElementById('dashboardView');
+const message=document.getElementById('message');
+const loginButton=document.getElementById('loginButton');
+const form=document.getElementById('loginForm');
+function showMessage(text,isError=false){message.textContent=text;message.classList.remove('hidden');message.classList.toggle('error',isError)}
+function hideMessage(){message.classList.add('hidden');message.textContent=''}
+function showLogin(){loginView.classList.remove('hidden');dashboardView.classList.add('hidden')}
+function showDashboard(email){loginView.classList.add('hidden');dashboardView.classList.remove('hidden');document.getElementById('welcome').textContent=`Signed in as ${email||'administrator'}`}
+const configured=/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(SUPABASE_URL) && SUPABASE_PUBLISHABLE_KEY.startsWith('sb_publishable_') && SUPABASE_PUBLISHABLE_KEY.length > 30;
+if(!configured){loginButton.disabled=true;showMessage('Setup required: edit admin.html and add your Supabase Project URL and publishable key. Never use a secret/service_role key.',true)}
+else{
+  try{
+    const {createClient}=await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+    const supabase=createClient(SUPABASE_URL,SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+    async function verifyAdmin(user){
+      if(!user){showLogin();return false}
+      const {data,error}=await supabase.from('admin_users').select('user_id').eq('user_id',user.id).maybeSingle();
+      if(error){showLogin();showMessage('Unable to verify admin access. Check the admin_users SELECT RLS policy.',true);return false}
+      if(!data){await supabase.auth.signOut();showLogin();showMessage('Access denied: this account is not an administrator.',true);return false}
+      hideMessage();showDashboard(user.email);return true;
+    }
+    form.addEventListener('submit',async e=>{
+      e.preventDefault();hideMessage();loginButton.disabled=true;loginButton.textContent='Signing in…';
+      try{
+        const {data,error}=await supabase.auth.signInWithPassword({email:document.getElementById('email').value.trim(),password:document.getElementById('password').value});
+        if(error)throw error;
+        document.getElementById('password').value='';
+        await verifyAdmin(data.user);
+      }catch(err){showLogin();showMessage(err?.message||'Sign in failed.',true)}
+      finally{loginButton.disabled=false;loginButton.textContent='Sign in securely'}
+    });
+    document.getElementById('logoutButton').addEventListener('click',async()=>{const {error}=await supabase.auth.signOut();showLogin();if(error)showMessage('Logout failed. Please try again.',true);else{hideMessage();form.reset()}});
+    const {data,error}=await supabase.auth.getUser();
+    if(error){showLogin()}else if(data.user){await verifyAdmin(data.user)}
+    supabase.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT')showLogin()});
+  }catch(err){showMessage('Could not load the authentication library. Check your internet connection.',true);loginButton.disabled=true}
+}
+</script>
+</body></html>
