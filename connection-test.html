@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="si">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NovaSave | API Connection Test</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;background:#080d19;color:#eef5ff;font:16px/1.6 system-ui,sans-serif}.panel{width:min(100%,520px);padding:26px;border-radius:18px;border:1px solid #304765;background:#121e33}h1{font-size:24px;margin:0 0 12px}p{color:#bacce6}button{background:#2485ff;color:#fff;border:0;border-radius:12px;padding:13px 20px;font:inherit;font-weight:700;cursor:pointer}button:disabled{opacity:.6}pre{white-space:pre-wrap;overflow-wrap:anywhere;padding:14px;background:#091629;border-radius:10px;border:1px solid #2c4260}.ok{color:#78e2a1}.error{color:#ffb0b0}.muted{color:#a9bdd7}a{color:#7cc7ff}
+</style>
+</head>
+<body><main class="panel">
+<h1>NovaSave — API Connection Test</h1>
+<p>මේ පිටුව GitHub Pages එකෙන් Cloudflare Worker එකට සම්බන්ධ වීම පරීක්ෂා කරයි.</p>
+<button id="test" type="button">Test API Connection</button>
+<p id="status" role="status" aria-live="polite" class="muted">පරීක්ෂාව ආරම්භ කිරීමට බොත්තම ඔබන්න.</p>
+<pre id="output" hidden></pre>
+<p class="muted">මෙය API සම්බන්ධතාව පමණක් පරීක්ෂා කරයි. MP4/MP3 Downloads මෙයින් ක්‍රියාත්මක නොවේ.</p>
+<a href="./index.html">← NovaSave Home</a>
+</main>
+<script>
+const endpoint='https://novasave-api.vishwapasan9.workers.dev/health';
+const button=document.getElementById('test');
+const status=document.getElementById('status');
+const output=document.getElementById('output');
+button.addEventListener('click',async()=>{
+  button.disabled=true;status.className='muted';status.textContent='Connecting…';output.hidden=true;
+  const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),12000);
+  try{
+    const response=await fetch(endpoint,{method:'GET',mode:'cors',cache:'no-store',signal:controller.signal});
+    const body=await response.text();let data;
+    try{data=JSON.parse(body)}catch{throw new Error('API returned invalid JSON')}
+    if(!response.ok||data.status!=='ok')throw new Error('Unexpected API response (HTTP '+response.status+')');
+    status.className='ok';status.textContent='✓ SUCCESS — Website → Cloudflare API connection works!';
+    output.textContent=JSON.stringify(data,null,2);output.hidden=false;
+  }catch(err){status.className='error';status.textContent='✗ FAILED — '+(err.name==='AbortError'?'Request timed out':err.message)+'. Check Worker URL, deployment and CORS settings.'}
+  finally{clearTimeout(timeout);button.disabled=false}
+});
+</script></body></html>
